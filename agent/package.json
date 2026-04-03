@@ -1,0 +1,29 @@
+{
+  "name": "quickai-agent",
+  "version": "0.1.0",
+  "description": "QuickAI coding agent sidecar",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "^1.3.26",
+    "@langchain/core": "^1.1.38",
+    "@langchain/ollama": "^1.2.6",
+    "cors": "^2.8.5",
+    "diff": "^8.0.4",
+    "express": "^4.21.2",
+    "langchain": "^1.2.39"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.15.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}
