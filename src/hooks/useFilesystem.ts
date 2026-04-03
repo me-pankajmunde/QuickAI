@@ -8,7 +8,7 @@ export interface FilesystemState {
   isAccessible: boolean;
 }
 
-export function useFilesystem(initialRoot = "~/Projects") {
+export function useFilesystem(initialRoot = "~") {
   const [state, setState] = useState<FilesystemState>({
     workspaceRoot: initialRoot,
     isAccessible: false,
@@ -19,20 +19,46 @@ export function useFilesystem(initialRoot = "~/Projects") {
       const response = await fetch(
         `${AGENT_BASE_URL}/filesystem/check?path=${encodeURIComponent(path)}`
       );
-      const data = (await response.json()) as { accessible: boolean };
-      setState({ workspaceRoot: path, isAccessible: data.accessible });
+      const data = (await response.json()) as {
+        accessible: boolean;
+        workspace_root?: string;
+      };
+      setState((prev) => ({
+        ...prev,
+        workspaceRoot: data.workspace_root ?? path,
+        isAccessible: data.accessible,
+      }));
     } catch {
       setState((prev) => ({ ...prev, isAccessible: false }));
     }
   }, []);
 
-  const setWorkspaceRoot = useCallback(
-    async (path: string) => {
-      setState((prev) => ({ ...prev, workspaceRoot: path }));
+  const setWorkspaceRoot = useCallback(async (path: string) => {
+    try {
+      const response = await fetch(`${AGENT_BASE_URL}/filesystem/root`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update workspace root");
+      }
+
+      const data = (await response.json()) as {
+        accessible: boolean;
+        workspace_root: string;
+      };
+
+      setState({
+        workspaceRoot: data.workspace_root,
+        isAccessible: data.accessible,
+      });
+    } catch {
+      setState((prev) => ({ ...prev, workspaceRoot: path, isAccessible: false }));
       await checkAccess(path);
-    },
-    [checkAccess]
-  );
+    }
+  }, [checkAccess]);
 
   const browseForFolder = useCallback(async (): Promise<string | null> => {
     try {
@@ -66,8 +92,8 @@ export function useFilesystem(initialRoot = "~/Projects") {
   }, []);
 
   useEffect(() => {
-    checkAccess(initialRoot);
-  }, [checkAccess, initialRoot]);
+    void setWorkspaceRoot(initialRoot);
+  }, [initialRoot, setWorkspaceRoot]);
 
   return {
     ...state,

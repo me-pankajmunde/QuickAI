@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use tauri::{
     CustomMenuItem, GlobalShortcutManager, Manager, SystemTray, SystemTrayEvent, SystemTrayMenu,
     SystemTrayMenuItem,
@@ -7,12 +8,18 @@ mod commands;
 
 pub use commands::*;
 
+const GLOBAL_HOTKEY: &str = "CmdOrCtrl+Shift+C";
+const GLOBAL_HOTKEY_LABEL: &str = "Cmd/Ctrl+Shift+C";
+
 pub fn run() {
     env_logger::init();
 
     let tray_menu = SystemTrayMenu::new()
         .add_item(CustomMenuItem::new("open", "Open QuickAI"))
-        .add_item(CustomMenuItem::new("coding_agent", "Coding Agent (Ctrl+Shift+C)"))
+        .add_item(CustomMenuItem::new(
+            "coding_agent",
+            format!("Coding Agent ({GLOBAL_HOTKEY_LABEL})"),
+        ))
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(CustomMenuItem::new("quit", "Quit"));
 
@@ -61,11 +68,11 @@ pub fn run() {
         .setup(|app| {
             let app_handle = app.handle();
 
-            // Register global hotkey Ctrl+Shift+C for Coding Agent
+            // Register a cross-platform global hotkey for the Coding Agent
             let mut shortcut_manager = app_handle.global_shortcut_manager();
             let app_handle_clone = app_handle.clone();
             shortcut_manager
-                .register("Ctrl+Shift+C", move || {
+                .register(GLOBAL_HOTKEY, move || {
                     if let Some(window) = app_handle_clone.get_window("main") {
                         window.show().unwrap_or_default();
                         window.set_focus().unwrap_or_default();
@@ -73,13 +80,13 @@ pub fn run() {
                     }
                 })
                 .unwrap_or_else(|e| {
-                    log::warn!("Failed to register global shortcut Ctrl+Shift+C: {e}");
+                    log::warn!("Failed to register global shortcut {GLOBAL_HOTKEY}: {e}");
                 });
 
             // Ensure app directories exist at startup
             let home = dirs_home();
-            for subdir in &["QuickAI/logs", "QuickAI/sessions", "QuickAI/agents"] {
-                let path = format!("{}/{}", home, subdir);
+            for subdir in &["logs", "sessions", "agents"] {
+                let path = home.join("QuickAI").join(subdir);
                 std::fs::create_dir_all(&path).unwrap_or_default();
             }
 
@@ -89,8 +96,6 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-fn dirs_home() -> String {
-    std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_else(|_| String::from("."))
+fn dirs_home() -> PathBuf {
+    tauri::api::path::home_dir().unwrap_or_else(|| PathBuf::from("."))
 }

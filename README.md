@@ -1,8 +1,8 @@
 # QuickAI
 
-QuickAI is a system-wide AI command palette desktop app built with **React + Vite + Tauri**. It provides fast access to AI workflows such as writing, coding, debugging, and general assistance without having to keep a browser tab open.
+QuickAI is a cross-platform AI command palette desktop app built with **React + Vite + Tauri**. It provides fast access to AI workflows such as writing, coding, debugging, and general assistance without having to keep a browser tab open.
 
-It supports **OpenAI-compatible APIs**, **Anthropic**, and **Ollama** backends.
+It supports **OpenAI-compatible APIs**, **Anthropic**, and **Ollama** backends, and is designed to run on **Windows, Linux, and macOS**.
 
 ## Quickstart
 
@@ -18,7 +18,11 @@ Before you start, make sure you have:
   - **Anthropic** via `ANTHROPIC_API_KEY`, or
   - **Ollama** running locally (default fallback: `codellama:13b`)
 
-> On Linux, install the required Tauri packages for your distro before running the desktop app.
+> QuickAI is intended to run on **Windows**, **Linux**, and **macOS**.
+>
+> - **Windows:** ensure WebView2 is available and install Visual Studio C++ build tools if needed.
+> - **macOS:** install Xcode Command Line Tools with `xcode-select --install`.
+> - **Linux:** install the required Tauri/WebKitGTK packages for your distro.
 
 ### 1. Install dependencies
 
@@ -61,6 +65,8 @@ npm run agent:dev
 ```
 
 The agent listens on `http://127.0.0.1:3001` by default.
+
+The default app hotkey is `Cmd/Ctrl+Shift+C`.
 
 ### 4. Launch the app
 

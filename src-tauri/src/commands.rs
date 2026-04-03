@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,9 +32,7 @@ pub fn write_clipboard(app_handle: tauri::AppHandle, text: String) -> Result<(),
 pub fn get_system_info() -> SystemInfo {
     let os = std::env::consts::OS.to_string();
     let arch = std::env::consts::ARCH.to_string();
-    let home_dir = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_else(|_| String::from("."));
+    let home_dir = home_dir().to_string_lossy().into_owned();
 
     SystemInfo { os, arch, home_dir }
 }
@@ -50,19 +50,24 @@ pub fn hide_window(window: tauri::Window) -> Result<(), String> {
 
 #[tauri::command]
 pub fn ensure_app_dirs() -> Result<Vec<String>, String> {
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_else(|_| String::from("."));
-
+    let base = home_dir().join("QuickAI");
     let dirs = vec![
-        format!("{}/QuickAI/logs", home),
-        format!("{}/QuickAI/sessions", home),
-        format!("{}/QuickAI/agents", home),
+        base.join("logs"),
+        base.join("sessions"),
+        base.join("agents"),
     ];
 
     for dir in &dirs {
-        std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create {dir}: {e}"))?;
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("Failed to create {}: {e}", dir.display()))?;
     }
 
-    Ok(dirs)
+    Ok(dirs
+        .into_iter()
+        .map(|dir| dir.to_string_lossy().into_owned())
+        .collect())
+}
+
+fn home_dir() -> PathBuf {
+    tauri::api::path::home_dir().unwrap_or_else(|| PathBuf::from("."))
 }

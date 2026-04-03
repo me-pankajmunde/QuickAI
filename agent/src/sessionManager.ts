@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { getHomeDir } from "./filesystem";
 import type { ChatMessage } from "./llmProvider";
 
 export interface Session {
@@ -13,11 +14,7 @@ export interface Session {
   mode: string;
 }
 
-const SESSIONS_DIR = path.join(
-  process.env.HOME ?? process.env.USERPROFILE ?? ".",
-  "QuickAI",
-  "sessions"
-);
+const SESSIONS_DIR = path.join(getHomeDir(), "QuickAI", "sessions");
 
 const MAX_SESSIONS = 10;
 const AUTO_CLEAR_MS = 30 * 60 * 1000; // 30 minutes

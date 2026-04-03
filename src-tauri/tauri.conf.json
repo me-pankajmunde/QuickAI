@@ -18,7 +18,7 @@
       "dialog": { "all": true },
       "fs": {
         "all": true,
-        "scope": ["$HOME/QuickAI/**", "$HOME/Projects/**", "$DOCUMENT/**"]
+        "scope": ["$HOME/**", "$DOCUMENT/**", "$DESKTOP/**", "$DOWNLOAD/**"]
       },
       "globalShortcut": { "all": true },
       "notification": { "all": true },

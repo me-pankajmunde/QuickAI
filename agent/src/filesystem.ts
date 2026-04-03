@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 
 export interface FilesystemConfig {
   enabled: boolean;
@@ -13,22 +14,51 @@ const DEFAULT_DENY_LIST = [
   "~/.aws",
   "~/.gnupg",
   "~/.config/credentials",
+  "~/Library/Keychains",
   "/etc",
   "/proc",
   "/sys",
+  "/System",
+  "/Library",
+  "/private",
   "C:\\Windows\\System32",
   "C:\\Users\\*\\AppData\\Roaming\\Microsoft\\Credentials",
 ];
 
-const LOG_DIR = path.join(
-  process.env.HOME ?? process.env.USERPROFILE ?? ".",
-  "QuickAI",
-  "logs"
-);
+const DEFAULT_WORKSPACE_CANDIDATES = [
+  "Projects",
+  "Developer",
+  path.join("Documents", "Projects"),
+  "Documents",
+  ".",
+];
+
+export function getHomeDir(): string {
+  try {
+    return os.homedir();
+  } catch {
+    return process.env.HOME ?? process.env.USERPROFILE ?? ".";
+  }
+}
+
+export function getDefaultWorkspaceRoot(): string {
+  const home = getHomeDir();
+
+  for (const candidate of DEFAULT_WORKSPACE_CANDIDATES) {
+    const resolved = candidate === "." ? home : path.join(home, candidate);
+    if (fs.existsSync(resolved)) {
+      return resolved;
+    }
+  }
+
+  return home;
+}
+
+const LOG_DIR = path.join(getHomeDir(), "QuickAI", "logs");
 
 function expandHome(p: string): string {
   if (p.startsWith("~/") || p === "~") {
-    const home = process.env.HOME ?? process.env.USERPROFILE ?? ".";
+    const home = getHomeDir();
     return p === "~" ? home : path.join(home, p.slice(2));
   }
   return p;
@@ -148,6 +178,24 @@ export class FilesystemManager {
     } catch {
       return false;
     }
+  }
+
+  setWorkspaceRoot(rootPath: string): string {
+    if (!this.config.enabled) {
+      throw new Error("Filesystem access is disabled.");
+    }
+
+    const resolved = resolveWorkspaceRoot(rootPath);
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+      throw new Error(`Workspace root does not exist or is not a directory: ${rootPath}`);
+    }
+
+    if (isDenied(resolved, this.denyList)) {
+      throw new Error(`Access denied (CA-052): ${rootPath} is in the deny-list`);
+    }
+
+    this.config.workspace_root = resolved;
+    return this.config.workspace_root;
   }
 
   getWorkspaceRoot(): string {

@@ -6,7 +6,7 @@ import { CodingAgent, type AgentRequest } from "./codingAgent";
 import { detectLanguage } from "./languageDetector";
 import type { Session } from "./sessionManager";
 import type { LLMSettings, LLMProvider } from "./llmProvider";
-import type { FilesystemConfig } from "./filesystem";
+import { getDefaultWorkspaceRoot, getHomeDir, type FilesystemConfig } from "./filesystem";
 
 // ─── Config types ─────────────────────────────────────────────────────────────
 export interface AgentConfig {
@@ -36,7 +36,7 @@ const DEFAULT_CONFIG: AgentConfig = {
   agent_id: "coder",
   display_name: "Coding Agent",
   icon: "code-bracket",
-  hotkey: "Ctrl+Shift+C",
+  hotkey: "CmdOrCtrl+Shift+C",
   system_prompt:
     "You are a senior software engineer assistant. You write clean, " +
     "well-documented, production-quality code. You explain concepts clearly " +
@@ -45,10 +45,7 @@ const DEFAULT_CONFIG: AgentConfig = {
   tools: ["Bash", "Read", "Edit"],
   filesystem: {
     enabled: true,
-    workspace_root: path.join(
-      process.env.HOME ?? process.env.USERPROFILE ?? ".",
-      "Projects"
-    ),
+    workspace_root: getDefaultWorkspaceRoot(),
     deny_list: [
       "~/.ssh",
       "~/.aws",
@@ -86,18 +83,49 @@ const DEFAULT_CONFIG: AgentConfig = {
 };
 
 // ─── Load config from disk ────────────────────────────────────────────────────
+function normalizeConfig(partial: Partial<AgentConfig>): AgentConfig {
+  const merged: AgentConfig = {
+    ...DEFAULT_CONFIG,
+    ...partial,
+    filesystem: {
+      ...DEFAULT_CONFIG.filesystem,
+      ...(partial.filesystem ?? {}),
+    },
+    llm: {
+      primary: {
+        ...DEFAULT_CONFIG.llm.primary,
+        ...(partial.llm?.primary ?? {}),
+      },
+      fallback: {
+        ...DEFAULT_CONFIG.llm.fallback,
+        ...(partial.llm?.fallback ?? {}),
+      },
+    },
+    output_defaults: {
+      ...DEFAULT_CONFIG.output_defaults,
+      ...(partial.output_defaults ?? {}),
+    },
+    session: {
+      ...DEFAULT_CONFIG.session,
+      ...(partial.session ?? {}),
+    },
+  };
+
+  if (!fs.existsSync(merged.filesystem.workspace_root)) {
+    merged.filesystem.workspace_root = getDefaultWorkspaceRoot();
+  }
+
+  return merged;
+}
+
 function loadConfig(): AgentConfig {
-  const configDir = path.join(
-    process.env.HOME ?? process.env.USERPROFILE ?? ".",
-    "QuickAI",
-    "agents"
-  );
+  const configDir = path.join(getHomeDir(), "QuickAI", "agents");
   const configFile = path.join(configDir, "coder.json");
 
   try {
     if (fs.existsSync(configFile)) {
       const raw = fs.readFileSync(configFile, "utf-8");
-      return { ...DEFAULT_CONFIG, ...(JSON.parse(raw) as Partial<AgentConfig>) };
+      return normalizeConfig(JSON.parse(raw) as Partial<AgentConfig>);
     }
   } catch {
     console.warn("[config] Failed to load coder.json; using defaults.");
@@ -111,7 +139,7 @@ function loadConfig(): AgentConfig {
     // Non-critical.
   }
 
-  return DEFAULT_CONFIG;
+  return normalizeConfig(DEFAULT_CONFIG);
 }
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
@@ -148,6 +176,22 @@ app.get("/filesystem/check", (req: Request, res: Response) => {
   const fs_manager = agent.getFilesystemManager();
   const accessible = fs_manager.checkAccess(checkPath);
   res.json({ accessible, workspace_root: fs_manager.getWorkspaceRoot() });
+});
+
+app.post("/filesystem/root", (req: Request, res: Response) => {
+  const { path: rootPath } = req.body as { path?: string };
+  if (!rootPath) {
+    res.status(400).json({ error: "path is required" });
+    return;
+  }
+
+  try {
+    const fs_manager = agent.getFilesystemManager();
+    const workspace_root = fs_manager.setWorkspaceRoot(rootPath);
+    res.json({ accessible: true, workspace_root });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
 });
 
 // ─── Sessions ─────────────────────────────────────────────────────────────────

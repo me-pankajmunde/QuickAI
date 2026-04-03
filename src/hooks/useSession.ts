@@ -20,7 +20,7 @@ export function useSession() {
   currentRef.current = currentSession;
 
   const createSession = useCallback(
-    (mode: AgentMode = "generate", workspaceRoot = "~/Projects"): Session => {
+    (mode: AgentMode = "generate", workspaceRoot = "~"): Session => {
       const session: Session = {
         id: generateId(),
         name: `Session ${new Date().toLocaleTimeString()}`,
