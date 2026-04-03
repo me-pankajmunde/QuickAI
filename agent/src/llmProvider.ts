@@ -1,5 +1,4 @@
 import { ChatAnthropic } from "@langchain/anthropic";
-import { ChatOllama } from "@langchain/ollama";
 import {
   HumanMessage,
   SystemMessage,
@@ -7,8 +6,10 @@ import {
   BaseMessage,
 } from "@langchain/core/messages";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { ChatOllama } from "@langchain/ollama";
+import { ChatOpenAI } from "@langchain/openai";
 
-export type LLMProvider = "anthropic" | "ollama";
+export type LLMProvider = "openai" | "anthropic" | "ollama";
 
 export interface LLMConfig {
   provider: LLMProvider;
@@ -48,6 +49,19 @@ function toLangChainMessages(
   return result;
 }
 
+/** Build a LangChain ChatOpenAI model instance. */
+function buildOpenAIModel(config: LLMConfig): ChatOpenAI {
+  const baseURL = process.env.OPENAI_BASE_URL;
+
+  return new ChatOpenAI({
+    apiKey: process.env.OPENAI_API_KEY ?? "not-needed",
+    model: config.model,
+    maxTokens: config.max_tokens,
+    streaming: true,
+    ...(baseURL ? { configuration: { baseURL } } : {}),
+  });
+}
+
 /** Build a LangChain ChatAnthropic model instance. */
 function buildAnthropicModel(config: LLMConfig): ChatAnthropic {
   return new ChatAnthropic({
@@ -67,7 +81,18 @@ function buildOllamaModel(config: LLMConfig): ChatOllama {
   });
 }
 
-/** Probe whether the Ollama server is reachable (NF-020). */
+function buildModel(config: LLMConfig): BaseChatModel {
+  switch (config.provider) {
+    case "openai":
+      return buildOpenAIModel(config);
+    case "anthropic":
+      return buildAnthropicModel(config);
+    case "ollama":
+      return buildOllamaModel(config);
+  }
+}
+
+/** Probe whether the Ollama server is reachable. */
 async function isOllamaAvailable(
   host = "http://localhost:11434"
 ): Promise<boolean> {
@@ -80,6 +105,49 @@ async function isOllamaAvailable(
   } catch {
     return false;
   }
+}
+
+async function checkProviderAvailability(
+  config: LLMConfig
+): Promise<{ available: boolean; reason?: string }> {
+  switch (config.provider) {
+    case "openai":
+      if (process.env.OPENAI_API_KEY || process.env.OPENAI_BASE_URL) {
+        return { available: true };
+      }
+      return {
+        available: false,
+        reason: "OPENAI_API_KEY or OPENAI_BASE_URL is not set.",
+      };
+
+    case "anthropic":
+      if (process.env.ANTHROPIC_API_KEY) {
+        return { available: true };
+      }
+      return {
+        available: false,
+        reason: "ANTHROPIC_API_KEY is not set.",
+      };
+
+    case "ollama": {
+      const host = process.env.OLLAMA_HOST ?? "http://localhost:11434";
+      const available = await isOllamaAvailable(host);
+      return available
+        ? { available: true }
+        : {
+            available: false,
+            reason: `Ollama is not reachable at ${host}.`,
+          };
+    }
+  }
+}
+
+function shouldFallback(error: { status?: number }): boolean {
+  return (
+    error.status === 429 ||
+    error.status === 503 ||
+    error.status === 529
+  );
 }
 
 /**
@@ -123,42 +191,54 @@ export class LLMProviderService {
     callbacks: StreamCallbacks
   ): Promise<void> {
     const primary = this.settings.primary;
+    const primaryStatus = await checkProviderAvailability(primary);
 
-    if (primary.provider === "anthropic") {
-      if (!process.env.ANTHROPIC_API_KEY) {
-        // No API key — skip directly to Ollama fallback (NF-020)
-        console.warn("[LLM] ANTHROPIC_API_KEY not set. Falling back to Ollama.");
-        await this.streamFallback(messages, systemPrompt, callbacks);
-        return;
-      }
-      await this.streamPrimary(messages, systemPrompt, primary, callbacks);
-    } else {
-      // Primary is Ollama
+    if (!primaryStatus.available) {
+      console.warn(
+        `[LLM] ${primaryStatus.reason ?? "Primary provider unavailable."} Falling back to ${this.settings.fallback.provider}.`
+      );
       await this.streamFallback(messages, systemPrompt, callbacks);
+      return;
     }
+
+    await this.streamWithConfig(messages, systemPrompt, primary, callbacks, false);
   }
 
-  private async streamPrimary(
+  private async streamWithConfig(
     messages: ChatMessage[],
     systemPrompt: string,
     config: LLMConfig,
-    callbacks: StreamCallbacks
+    callbacks: StreamCallbacks,
+    fallback: boolean
   ): Promise<void> {
+    const availability = await checkProviderAvailability(config);
+    if (!availability.available) {
+      if (!fallback) {
+        console.warn(
+          `[LLM] ${availability.reason ?? "Primary provider unavailable."} Falling back to ${this.settings.fallback.provider}.`
+        );
+        await this.streamFallback(messages, systemPrompt, callbacks);
+        return;
+      }
+
+      callbacks.onError(
+        `${availability.reason ?? "Fallback provider unavailable."} ` +
+          "Configure OPENAI_API_KEY / OPENAI_BASE_URL, ANTHROPIC_API_KEY, or start Ollama."
+      );
+      return;
+    }
+
     const lcMessages = toLangChainMessages(messages, systemPrompt);
-    const model = buildAnthropicModel(config);
+    const model = buildModel(config);
 
     try {
-      await streamModel(model, lcMessages, "anthropic", false, callbacks);
+      await streamModel(model, lcMessages, config.provider, fallback, callbacks);
     } catch (err) {
       const error = err as { status?: number; message?: string };
-      // NF-020: fall back on service-unavailable / rate-limit responses
-      if (
-        error.status === 503 ||
-        error.status === 429 ||
-        error.status === 529
-      ) {
+
+      if (!fallback && shouldFallback(error)) {
         console.warn(
-          `[LLM] Primary provider returned ${error.status}. Falling back to Ollama.`
+          `[LLM] ${config.provider} returned ${error.status}. Falling back to ${this.settings.fallback.provider}.`
         );
         await this.streamFallback(messages, systemPrompt, callbacks);
       } else {
@@ -173,24 +253,6 @@ export class LLMProviderService {
     callbacks: StreamCallbacks
   ): Promise<void> {
     const fallbackConfig = this.settings.fallback;
-    const host = process.env.OLLAMA_HOST ?? "http://localhost:11434";
-
-    const available = await isOllamaAvailable(host);
-    if (!available) {
-      callbacks.onError(
-        "Primary LLM provider unavailable and Ollama fallback is not running. " +
-          "Start Ollama or configure ANTHROPIC_API_KEY."
-      );
-      return;
-    }
-
-    const lcMessages = toLangChainMessages(messages, systemPrompt);
-    const model = buildOllamaModel(fallbackConfig);
-
-    try {
-      await streamModel(model, lcMessages, "ollama", true, callbacks);
-    } catch (err) {
-      callbacks.onError((err as Error).message ?? String(err));
-    }
+    await this.streamWithConfig(messages, systemPrompt, fallbackConfig, callbacks, true);
   }
 }

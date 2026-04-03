@@ -32,7 +32,7 @@ export const AgentPanel: React.FC = () => {
   const [detectedLang, setDetectedLang] = useState<string | undefined>();
   const [isStreaming, setIsStreaming] = useState(false);
   const [fallbackActive, setFallbackActive] = useState(false);
-  const [providerUsed, setProviderUsed] = useState<LLMProvider>("anthropic");
+  const [providerUsed, setProviderUsed] = useState<LLMProvider>("openai");
   const [statusMsg, setStatusMsg] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 

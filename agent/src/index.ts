@@ -63,8 +63,8 @@ const DEFAULT_CONFIG: AgentConfig = {
   mcp_servers: [],
   llm: {
     primary: {
-      provider: "anthropic",
-      model: "claude-sonnet-4-20250514",
+      provider: "openai",
+      model: "gpt-4o-mini",
       max_tokens: 4096,
     },
     fallback: {
@@ -185,7 +185,7 @@ app.post("/agent/stream", async (req: Request, res: Response) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 
-  let finalProvider: LLMProvider = "anthropic";
+  let finalProvider: LLMProvider = config.llm.primary.provider;
   let finalFallback = false;
   let sessionId = agentReq.session_id ?? "";
 
@@ -232,7 +232,7 @@ app.post("/agent/complete", async (req: Request, res: Response) => {
   }
 
   let fullText = "";
-  let finalProvider: LLMProvider = "anthropic";
+  let finalProvider: LLMProvider = config.llm.primary.provider;
   let finalFallback = false;
   let sessionId = agentReq.session_id ?? "";
 

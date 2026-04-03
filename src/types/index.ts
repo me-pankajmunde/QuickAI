@@ -4,7 +4,7 @@ export type AgentMode = "generate" | "explain" | "debug" | "refactor";
 export type ExplainGranularity = "summary" | "detailed" | "conceptual";
 
 // ─── LLM providers ────────────────────────────────────────────────────────────
-export type LLMProvider = "anthropic" | "ollama";
+export type LLMProvider = "openai" | "anthropic" | "ollama";
 
 export interface LLMConfig {
   provider: LLMProvider;
