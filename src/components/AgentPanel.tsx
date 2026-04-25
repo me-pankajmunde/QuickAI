@@ -231,7 +231,13 @@ export const AgentPanel: React.FC = () => {
       {/* Header */}
       <header className="agent-panel__header">
         <div className="agent-panel__title">
-          <span className="agent-panel__icon">⚡</span>
+          <span className="agent-panel__icon" aria-hidden="true">
+            <svg width="26" height="18" viewBox="0 0 26 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0" y="0" width="10" height="14" rx="4" fill="#080809"/>
+              <rect x="16" y="0" width="10" height="14" rx="4" fill="#080809"/>
+              <path d="M9 15 Q13 18.5 17 15" stroke="#080809" strokeWidth="1.8" strokeLinecap="round" fill="none"/>
+            </svg>
+          </span>
           <h1>QuickAI Coding Agent</h1>
         </div>
         <div className="agent-panel__header-actions">
@@ -269,7 +275,7 @@ export const AgentPanel: React.FC = () => {
       )}
 
       {/* Input area */}
-      <div className="agent-panel__inputs">
+      <div className="glass-card agent-panel__inputs">
         {/* Prompt / goal for generate + refactor */}
         {(mode === "generate" || showGoalInput) && (
           <div className="form-group">
@@ -384,7 +390,7 @@ export const AgentPanel: React.FC = () => {
 
       {/* Output area */}
       {output && (
-        <div className="agent-panel__output">
+        <div className="glass-card agent-panel__output">
           <div className="agent-panel__output-header">
             <h2>Output</h2>
             <OutputActions
